@@ -19,11 +19,52 @@ class ManageIQ::Providers::Amazon::Inventory::Parser::StorageManager::Ebs < Mana
         :volume_type       => volume['volume_type'],
         :size              => volume['size'].to_i.gigabytes,
         :base_snapshot     => persister.cloud_volume_snapshots.lazy_find(volume['snapshot_id']),
-        :availability_zone => persister.availability_zones.lazy_find(volume['availability_zone'])
+        :availability_zone => persister.availability_zones.lazy_find(volume['availability_zone']),
+        :iops              => volume['iops'],
+        :encrypted         => volume['encrypted'],
       )
 
       volume_attachments(persister_volume, volume['attachments'])
     end
+  end
+
+  def parse_volume(volume)
+    uid = volume['volume_id']
+
+    volume_hash = {
+      :type                  => self.class.volume_type,
+      :ext_management_system => ems,
+      :ems_ref               => uid,
+      :name                  => get_from_tags(volume, :name) || uid,
+      :status                => volume['state'],
+      :creation_time         => volume['create_time'],
+      :volume_type           => volume['volume_type'],
+      :size                  => volume['size'].to_i.gigabytes,
+      :base_snapshot         => persister.cloud_volume_snapshots.lazy_find(volume['snapshot_id']),
+      :availability_zone     => persister.availability_zones.lazy_find(volume['availability_zone']),
+      :iops                  => volume['iops'],
+      :encrypted             => volume['encrypted'],
+    }
+
+    link_volume_to_disk(volume_hash, volume['attachments'])
+
+    volume_hash
+  end
+
+  def parse_snapshot(snap)
+    uid = snap['snapshot_id']
+
+    {
+      :type                  => self.class.volume_snapshot_type,
+      :ext_management_system => ems,
+      :ems_ref               => uid,
+      :name                  => get_from_tags(snap, :name) || uid,
+      :status                => snap['state'],
+      :creation_time         => snap['start_time'],
+      :description           => snap['description'],
+      :size                  => snap['volume_size'].to_i.gigabytes,
+      :cloud_volume          => persister.cloud_volumes.lazy_find(snap['volume_id'])
+    }
   end
 
   def snapshots
